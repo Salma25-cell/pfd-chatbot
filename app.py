@@ -2,10 +2,11 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings 
- # CHANGED: Using HuggingFace instead of Google
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS  
+from langchain_groq import ChatGroq
 
 # -------------------- LOAD ENV --------------------
 load_dotenv()
@@ -63,42 +64,266 @@ def get_vectorstore(text_chunks):
 
     return vectorstore
 
+
 # -------------------- SIMILARITY SEARCH --------------------
-def search_relevant_chunks(vectorstore, question, k=6):
+def search_relevant_chunks(vectorstore, question, k=3):
     """
-    Find the most relevant chunks for a question
-    
+    Find the most relevant chunks for a question 
     Parameters:
-    - vectorstore: The FAISS database with all chunks
-    - question: User's question as a string
-    - k: How many chunks to retrieve (default: 3)
-    
+    - vectorstore: the FAISS database with all chunks
+    - question: user's question as a string
+    - k: how many chunks to retrieve (default: 3)
+
     Returns:
-    - List of relevant text chunks
+    - list of relevant text chunks
     """
-    # Search for similar chunks
+    # Search for similar chunks 
     # This converts the question to numbers and finds matching chunks
     relevant_docs = vectorstore.similarity_search(question, k=k)
-    
+
     # Extract just the text from the results
     relevant_texts = [doc.page_content for doc in relevant_docs]
-    
+
     return relevant_texts
+
+
+# -------------------- ANSWER GENERATION --------------------
+def generate_answer(vectorstore, question):
+    """
+    Generate an answer using retrieved chunks + LLM (RAG)
+    Simple approach without chains - easier to debug and more reliable
+    
+    Parameters:
+    - vectorstore: FAISS vector store with document chunks
+    - question: user's question
+    
+    Returns:
+    - dictionary with 'result' (answer) and 'source_documents' (chunks used)
+    """
+    # Check if API key exists
+    if not os.getenv("GROQ_API_KEY"):
+        raise ValueError("GROQ_API_KEY not found in environment variables")
+    
+    # Step 1: Get relevant document chunks
+    relevant_docs = vectorstore.similarity_search(question, k=3)
+    
+    # Step 2: Combine chunks into context
+    context = "\n\n".join([doc.page_content for doc in relevant_docs])
+    
+    # Step 3: Initialize Groq LLM
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",  # Fast and free model
+        api_key=os.getenv("GROQ_API_KEY"),
+        temperature=0.3  # Lower = more focused, higher = more creative
+    )
+    
+    # Step 4: Create prompt
+    prompt = f"""You are a helpful assistant that answers questions based on the provided context from PDF documents.
+
+Use the following context to answer the question. 
+If you cannot find the answer in the context, say "I cannot find that information in the provided documents."
+Be concise and specific in your answer.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+    
+    # Step 5: Get response from LLM
+    response = llm.invoke(prompt)
+    
+    # Return in same format as before for compatibility
+    return {
+        'result': response.content,
+        'source_documents': relevant_docs
+    }
+# -------------------- THEME HANDLER --------------------
+# -------------------- FULL THEME HANDLER --------------------
+def apply_theme(theme):
+    if theme == "dark":
+        st.markdown("""
+        <style>
+        .stApp {
+            background-color: #0d1117 !important;
+            color: #e6edf3 !important;
+        }
+
+        header[data-testid="stHeader"] {
+            background-color: #0d1117 !important;
+            border-bottom: 1px solid #30363d !important;
+        }
+
+        section[data-testid="stSidebar"] {
+            background-color: #161b22 !important;
+        }
+
+        h1, h2, h3, h4, h5, h6, p, span, label {
+            color: #e6edf3 !important;
+        }
+
+        input, textarea {
+            background-color: #21262d !important;
+            color: #e6edf3 !important;
+            border-radius: 8px !important;
+            border: 1px solid #30363d !important;
+        }
+
+        div[data-testid="stFileUploader"] {
+            background-color: #161b22 !important;
+            border: 1px dashed #30363d !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+        }
+
+        .stButton > button {
+            background-color: #238636 !important;
+            color: white !important;
+            border-radius: 8px !important;
+        }
+
+        div[data-testid="stExpander"] {
+            background-color: #161b22 !important;
+            border: 1px solid #30363d !important;
+            border-radius: 10px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+    elif theme == "pink":
+        st.markdown("""
+        <style>
+        .stApp {
+            background-color: #fff1f5 !important;
+            color: #3b0a1a !important;
+        }
+
+        header[data-testid="stHeader"] {
+            background-color: #ffe4ec !important;
+            border-bottom: 1px solid #f4b6c2 !important;
+        }
+
+        section[data-testid="stSidebar"] {
+            background-color: #ffe4ec !important;
+        }
+
+        h1, h2, h3, h4, h5, h6, p, span, label {
+            color: #3b0a1a !important;
+        }
+
+        input, textarea {
+            background-color: #fff7fa !important;
+            color: #3b0a1a !important;
+            border-radius: 8px !important;
+            border: 1px solid #f4b6c2 !important;
+        }
+
+        div[data-testid="stFileUploader"] {
+            background-color: #fff7fa !important;
+            border: 1px dashed #f4b6c2 !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+        }
+
+        .stButton > button {
+            background-color: #ec407a !important;
+            color: white !important;
+            border-radius: 8px !important;
+        }
+
+        .stButton > button:hover {
+            background-color: #d81b60 !important;
+        }
+
+        div[data-testid="stExpander"] {
+            background-color: #fff7fa !important;
+            border-radius: 10px !important;
+            border: 1px solid #f4b6c2 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+    else:  # LIGHT
+        st.markdown("""
+        <style>
+        .stApp {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }
+
+        header[data-testid="stHeader"] {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #ddd !important;
+        }
+
+        section[data-testid="stSidebar"] {
+            background-color: #f5f7fb !important;
+        }
+
+        h1, h2, h3, h4, h5, h6, p, span, label {
+            color: #000000 !important;
+        }
+
+        input, textarea {
+            background-color: #f0f2f6 !important;
+            color: #000000 !important;
+            border-radius: 8px !important;
+            border: 1px solid #ccc !important;
+        }
+
+        div[data-testid="stFileUploader"] {
+            background-color: #ffffff !important;
+            border: 1px dashed #ccc !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+        }
+
+        .stButton > button {
+            background-color: #1976d2 !important;
+            color: white !important;
+            border-radius: 8px !important;
+        }
+
+        div[data-testid="stExpander"] {
+            background-color: #ffffff !important;
+            border-radius: 10px !important;
+            border: 1px solid #ddd !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
 
 # -------------------- MAIN APP --------------------
 def main():
+        # ---------- THEME TOGGLE ----------
+
     st.set_page_config(
         page_title="Chat with PDFs",
         page_icon="📚"
     )
+    if "theme" not in st.session_state:
+         st.session_state.theme = "light"
+
+    with st.sidebar:
+        st.markdown("## 🎨 Theme")
+        theme_choice = st.radio(
+        "Select theme",
+        ["Light", "Dark", "Pink"]
+        )
+
+    st.session_state.theme = theme_choice.lower()
+    apply_theme(st.session_state.theme)
 
     st.header("Chat with multiple PDFs 📚")
     
-    # Info box about the free embeddings
-    # st.info("💡 Using free local HuggingFace embeddings - no API costs or limits!")
+    # Info box
+    st.info("💡 Using free local HuggingFace embeddings + Groq LLM for answers")
 
-    # REMOVED: Google API key check (not needed anymore)
-    # No API key validation required for local embeddings
+    # Check for API key
+    if not os.getenv("GROQ_API_KEY"):
+        st.error("⚠️ GROQ_API_KEY not found in .env file. Please add it to use answer generation.")
+        st.stop()
 
     user_question = st.text_input("Ask a question about your documents:")
 
@@ -134,34 +359,42 @@ def main():
                 st.write(f"✅ Total chunks: {len(text_chunks)}")
 
                 # Step 3: Create vector store with embeddings
-                # Note: First run will download the model (~90MB), then it's cached
                 with st.spinner("Creating embeddings (first run may take a moment)..."):
                     vectorstore = get_vectorstore(text_chunks)
                 
                 # Store in session state for later use
                 st.session_state.vectorstore = vectorstore
 
-                st.success("✅ PDFs processed successfully!")
+                st.success("✅ PDFs processed successfully! You can now ask questions.")
 
     # Handle user questions
     if user_question:
         if "vectorstore" not in st.session_state:
             st.warning("⚠️ Please upload and process PDFs first.")
-
-        else:    
-            # Step 1: Search for relevant chunks
-            with st.spinner("Searching for relevant information..."):
-                relevant_chunks = search_relevant_chunks(
-                    st.session_state.vectorstore, 
-                    user_question,
-                    k=6  # Get top 3 most relevant chunks
-                )
-        
-            # Display what we found (for testing)
-            st.write("### 🔍 Found these relevant sections:")
-            for i, chunk in enumerate(relevant_chunks, 1):
-                with st.expander(f"Chunk {i}"):
-                    st.write(chunk)
+        else:
+            # Generate answer using RAG
+            with st.spinner("🤔 Thinking and generating answer..."):
+                try:
+                    result = generate_answer(
+                        st.session_state.vectorstore,
+                        user_question
+                    )
+                    
+                    # Display the answer
+                    st.write("### 💬 Answer:")
+                    st.write(result['result'])
+                    
+                    # Show source chunks in an expander
+                    with st.expander("📄 View source chunks used"):
+                        st.write("These are the document sections used to generate the answer:")
+                        for i, doc in enumerate(result['source_documents'], 1):
+                            st.write(f"**Chunk {i}:**")
+                            st.write(doc.page_content)
+                            st.write("---")
+                
+                except Exception as e:
+                    st.error(f"Error generating answer: {str(e)}")
+                    st.write("Please check your GROQ_API_KEY and try again.")
 
 
 # -------------------- RUN --------------------
