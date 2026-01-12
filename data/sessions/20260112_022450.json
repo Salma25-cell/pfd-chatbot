@@ -1,0 +1,14 @@
+{
+  "session_id": "20260112_022450",
+  "created_at": "2026-01-12 02:24:50",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hi"
+    },
+    {
+      "role": "assistant",
+      "content": "\u26a0\ufe0f Please upload and process PDFs first."
+    }
+  ]
+}

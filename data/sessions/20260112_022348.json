@@ -1,0 +1,14 @@
+{
+  "session_id": "20260112_022348",
+  "created_at": "2026-01-12 02:23:48",
+  "messages": [
+    {
+      "role": "user",
+      "content": "what is html"
+    },
+    {
+      "role": "assistant",
+      "content": "\u26a0\ufe0f Please upload and process PDFs first."
+    }
+  ]
+}
